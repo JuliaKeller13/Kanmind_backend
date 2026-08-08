@@ -29,9 +29,9 @@ class UserManager(BaseUserManager):
 
         return self._create_user(email, password, **extra_fields)
 
-    @staticmethod #decorator, kein self nötig, prüft ausschließlich ubergebene Dictionary
+    @staticmethod #decorator, kein self nötig, prüft ausschließlich Übergebene Dictionary
     def _validate_superuser_flags(extra_fields): #überprüfen Admineinstellungen
-        if extra_fields.get("is_staf") is not True:
+        if extra_fields.get("is_staff") is not True:
             raise ValueError("A superuser must have is_staff=True")
 
         if extra_fields.get("is_superuser") is not True:

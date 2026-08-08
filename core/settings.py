@@ -41,17 +41,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
 
-    'users_app',
-    'boards_app',
-    'tasks_app',
-    'corsheaders ',
+    'users_app.apps.UsersAppConfig',
+    'boards_app.apps.BoardsAppConfig',
+    'tasks_app.apps.TasksAppConfig',
+    'corsheaders',
 ]
 
 AUTH_USER_MODEL = 'users_app.User'
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.users_app.TokenAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",

@@ -1,3 +1,24 @@
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-# Create your models here.
+from .managers import UserManager
+
+
+class User(AbstractUser):
+    username = None
+
+    fullname = models.CharField(max_length=255)
+    email = models.EmailField(unique=True)
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["fullname"]
+
+    objects = UserManager()
+
+    class Meta:
+        ordering = ["email"]
+        verbose_name = "user"
+        verbose_name_plural = "users"
+
+    def __str__(self):
+        return self.email
