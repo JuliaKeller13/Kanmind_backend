@@ -1,6 +1,9 @@
 from django.test import TestCase
 
-from users_app.api.serializers import RegistrationSerializer
+from users_app.api.serializers import (
+    LoginSerializer,
+    RegistrationSerializer,
+)
 from users_app.models import User
 
 
@@ -41,6 +44,58 @@ class RegistrationSerializerTest(TestCase):
             password="examplePassword",
         )
         serializer = RegistrationSerializer(data=self.valid_data)
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("email", serializer.errors)
+
+
+class LoginSerializerTest(TestCase):
+    def setUp(self):
+        self.password = "examplePassword"
+        self.user = User.objects.create_user(
+            fullname="Example Username",
+            email="example@mail.de",
+            password=self.password,
+        )
+
+    def test_valid_credentials(self):
+        serializer = LoginSerializer(
+            data={
+                "email": self.user.email,
+                "password": self.password,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(serializer.validated_data["user"], self.user)
+
+    def test_wrong_password_is_invalid(self):
+        serializer = LoginSerializer(
+            data={
+                "email": self.user.email,
+                "password": "wrongPassword",
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+
+    def test_unknown_email_is_invalid(self):
+        serializer = LoginSerializer(
+            data={
+                "email": "unknown@mail.de",
+                "password": self.password,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+
+    def test_invalid_email_format_is_invalid(self):
+        serializer = LoginSerializer(
+            data={
+                "email": "invalid-email",
+                "password": self.password,
+            }
+        )
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("email", serializer.errors)
