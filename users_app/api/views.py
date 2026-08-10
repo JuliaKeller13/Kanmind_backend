@@ -5,12 +5,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .responses import build_auth_response
-from .serializers import RegistrationSerializer, LoginSerializer
+from .serializers import LoginSerializer, RegistrationSerializer
 
 
 class RegistrationView(GenericAPIView):
     serializer_class = RegistrationSerializer
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
@@ -26,7 +26,7 @@ class RegistrationView(GenericAPIView):
 
 class LoginView(GenericAPIView):
     serializer_class = LoginSerializer
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)

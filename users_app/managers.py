@@ -4,13 +4,13 @@ from django.contrib.auth.base_user import BaseUserManager
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
-    def _create_user(self, email, password, **extra_fields): #Methode nur für diese Datei, also interne Verwendung
+    def _create_user(self, email, password, **extra_fields):
         if not email:
             raise ValueError("The email address is required")
 
-        email = self.normalize_email(email) #alles wird klein geschrieben
-        user = self.model(email=email, **extra_fields) #das wird model, speicher alle felder
-        user.set_password(password) #password wird gehash und nicht direkt gespeichert. 
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
         user.save(using=self._db)
 
         return user
@@ -29,8 +29,8 @@ class UserManager(BaseUserManager):
 
         return self._create_user(email, password, **extra_fields)
 
-    @staticmethod #decorator, kein self nötig, prüft ausschließlich Übergebene Dictionary
-    def _validate_superuser_flags(extra_fields): #überprüfen Admineinstellungen
+    @staticmethod
+    def _validate_superuser_flags(extra_fields):
         if extra_fields.get("is_staff") is not True:
             raise ValueError("A superuser must have is_staff=True")
 
