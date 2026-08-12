@@ -88,3 +88,56 @@ class BoardViewSetTest(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Board.objects.exists())
+
+    def test_list_accessible_boards(self):
+        """Return boards owned by or assigned to the authenticated user."""
+        owned_board = Board.objects.create(
+            title="Owned Board",
+            owner=self.owner,
+        )
+        member_board = Board.objects.create(
+            title="Member Board",
+            owner=self.member,
+        )
+        member_board.members.add(self.owner)
+
+        other_user = User.objects.create_user(
+            email="other@example.com",
+            password="testpassword",
+            fullname="Other User",
+        )
+        Board.objects.create(
+            title="Private Board",
+            owner=other_user,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        board_ids = {board["id"] for board in response.data}
+        self.assertEqual(
+            board_ids,
+            {owned_board.id, member_board.id},
+        )
+
+    def test_list_does_not_duplicate_owned_member_board(self):
+        """Return a board once when the owner is also a member."""
+        board = Board.objects.create(
+            title="Shared Board",
+            owner=self.owner,
+        )
+        board.members.add(self.owner)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], board.id)
+
+    def test_list_boards_requires_authentication(self):
+        """Reject board listing by unauthenticated users."""
+        self.client.credentials()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 401)

@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -13,7 +14,13 @@ class BoardViewSet(ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
     permission_classes = (IsAuthenticatedBoardUser,)
-    http_method_names = ("post",)
+
+    def get_queryset(self):
+        """Return boards accessible to the authenticated user."""
+        user = self.request.user
+        return Board.objects.filter(
+            Q(owner=user) | Q(members=user)
+        ).distinct()
 
     def create(self, request, *args, **kwargs):
         """Create a board owned by the authenticated user."""

@@ -1,10 +1,16 @@
-from rest_framework.routers import SimpleRouter
+from django.urls import path
 
 from .views import BoardViewSet
 
 app_name = "boards_app"
 
-router = SimpleRouter()
-router.register("boards", BoardViewSet, basename="board")
+board_list = BoardViewSet.as_view(
+    {
+        "get": "list",
+        "post": "create",
+    }
+)
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("boards/", board_list, name="board-list"),
+]
