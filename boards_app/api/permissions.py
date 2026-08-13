@@ -13,3 +13,9 @@ class HasBoardAccess(BasePermission):
             board.owner_id == request.user.id
             or board.members.filter(id=request.user.id).exists()
         )
+
+class IsBoardOwner(BasePermission):
+    """Allow access only to the board owner."""
+
+    def has_object_permission(self, request, view, board):
+        return board.owner_id == request.user.id

@@ -383,3 +383,53 @@ class BoardViewSetTest(APITestCase):
                 ],
             },
         )
+
+    def test_delete_board_as_owner(self):
+        """Allow the owner to delete a board."""
+        board = Board.objects.create(
+            title="Board",
+            owner=self.owner,
+        )
+
+        response = self.client.delete(self.get_detail_url(board))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Board.objects.filter(id=board.id).exists())
+
+    def test_delete_board_as_member(self):
+        """Reject board deletion by a board member."""
+        board = Board.objects.create(
+            title="Board",
+            owner=self.member,
+        )
+        board.members.add(self.owner)
+
+        response = self.client.delete(self.get_detail_url(board))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Board.objects.filter(id=board.id).exists())
+
+    def test_delete_board_requires_authentication(self):
+        """Reject board deletion by unauthenticated users."""
+        board = Board.objects.create(
+            title="Board",
+            owner=self.owner,
+        )
+        self.client.credentials()
+
+        response = self.client.delete(self.get_detail_url(board))
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(Board.objects.filter(id=board.id).exists())
+
+    def test_delete_unknown_board(self):
+        """Return not found when deleting an unknown board."""
+        url = reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": 999999},
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 404)
+        

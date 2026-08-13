@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from ..models import Board
-from .permissions import HasBoardAccess, IsAuthenticatedBoardUser
+from .permissions import (
+    HasBoardAccess,
+    IsAuthenticatedBoardUser,
+    IsBoardOwner,
+)
 from .serializers import (
     BoardDetailSerializer,
     BoardSerializer,
@@ -50,3 +54,13 @@ class BoardViewSet(ModelViewSet):
             self.get_serializer(board).data,
             status=status.HTTP_201_CREATED,
         )
+
+    def get_permissions(self):
+        """Return permissions required for the current action."""
+        if self.action == "destroy":
+            classes = (IsAuthenticatedBoardUser, IsBoardOwner)
+        elif self.action in ("retrieve", "partial_update"):
+            classes = (IsAuthenticatedBoardUser, HasBoardAccess)
+        else:
+            classes = (IsAuthenticatedBoardUser,)
+        return [permission() for permission in classes]
