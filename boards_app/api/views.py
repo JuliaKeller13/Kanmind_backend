@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from ..models import Board
-from .permissions import IsAuthenticatedBoardUser
-from .serializers import BoardSerializer
+from .permissions import HasBoardAccess, IsAuthenticatedBoardUser
+from .serializers import BoardDetailSerializer, BoardSerializer
 
 
 class BoardViewSet(ModelViewSet):
@@ -13,14 +13,26 @@ class BoardViewSet(ModelViewSet):
 
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
-    permission_classes = (IsAuthenticatedBoardUser,)
+    permission_classes = (
+        IsAuthenticatedBoardUser,
+        HasBoardAccess,
+    )
+    lookup_url_kwarg = "board_id"
 
     def get_queryset(self):
-        """Return boards accessible to the authenticated user."""
-        user = self.request.user
-        return Board.objects.filter(
-            Q(owner=user) | Q(members=user)
-        ).distinct()
+        """Return the appropriate boards for the current action."""
+        if self.action == "list":
+            user = self.request.user
+            return Board.objects.filter(
+                Q(owner=user) | Q(members=user)
+            ).distinct()
+        return Board.objects.all()
+
+    def get_serializer_class(self):
+        """Return the serializer required by the current action."""
+        if self.action == "retrieve":
+            return BoardDetailSerializer
+        return BoardSerializer
 
     def create(self, request, *args, **kwargs):
         """Create a board owned by the authenticated user."""

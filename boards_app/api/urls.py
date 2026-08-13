@@ -11,6 +11,17 @@ board_list = BoardViewSet.as_view(
     }
 )
 
+board_detail = BoardViewSet.as_view(
+    {
+        "get": "retrieve",
+    }
+)
+
 urlpatterns = [
     path("boards/", board_list, name="board-list"),
+    path(
+        "boards/<int:board_id>/",
+        board_detail,
+        name="board-detail",
+    ),
 ]

@@ -6,6 +6,17 @@ from ..models import Board
 User = get_user_model()
 
 
+class BoardMemberSerializer(serializers.ModelSerializer):
+    """Serialize basic user information for board members."""
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "email",
+            "fullname",
+        )
+
 class BoardSerializer(serializers.ModelSerializer):
     """Serialize board creation and board response data."""
 
@@ -48,3 +59,24 @@ class BoardSerializer(serializers.ModelSerializer):
     def get_tasks_high_prio_count(self, board):
         """Return the number of high-priority tasks on a new board."""
         return 0
+
+class BoardDetailSerializer(serializers.ModelSerializer):
+    """Serialize detailed board information."""
+
+    members = BoardMemberSerializer(many=True, read_only=True)
+    owner_id = serializers.IntegerField(read_only=True)
+    tasks = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Board
+        fields = (
+            "id",
+            "title",
+            "owner_id",
+            "members",
+            "tasks",
+        )
+
+    def get_tasks(self, board):
+        """Return tasks until task serialization is integrated."""
+        return []

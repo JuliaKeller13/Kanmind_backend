@@ -29,6 +29,13 @@ class BoardViewSetTest(APITestCase):
         )
         self.url = reverse("boards_app:board-list")
 
+    def get_detail_url(self, board):
+        """Return the detail URL for a board."""
+        return reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": board.id},
+        )
+
     def test_create_board(self):
         """Create a board for the authenticated user."""
         data = {
@@ -141,3 +148,72 @@ class BoardViewSetTest(APITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 401)
+
+    def test_retrieve_board_as_owner(self):
+        """Allow the owner to retrieve board details."""
+        board = Board.objects.create(
+            title="Owned Board",
+            owner=self.owner,
+        )
+        board.members.add(self.member)
+
+        response = self.client.get(self.get_detail_url(board))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], board.id)
+        self.assertEqual(response.data["title"], "Owned Board")
+        self.assertEqual(response.data["owner_id"], self.owner.id)
+
+    def test_retrieve_board_without_access(self):
+        """Reject users who are neither owner nor board member."""
+        other_user = User.objects.create_user(
+            email="other@example.com",
+            password="testpassword",
+            fullname="Other User",
+        )
+        board = Board.objects.create(
+            title="Private Board",
+            owner=other_user,
+        )
+
+        response = self.client.get(self.get_detail_url(board))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_retrieve_unknown_board(self):
+        """Return not found for an unknown board ID."""
+        url = reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": 999999},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_retrieve_board_response_data(self):
+        """Return members and task data in the board detail response."""
+        board = Board.objects.create(
+            title="Project X",
+            owner=self.owner,
+        )
+        board.members.add(self.member)
+
+        response = self.client.get(self.get_detail_url(board))
+
+        self.assertEqual(
+            response.data,
+            {
+                "id": board.id,
+                "title": "Project X",
+                "owner_id": self.owner.id,
+                "members": [
+                    {
+                        "id": self.member.id,
+                        "email": self.member.email,
+                        "fullname": self.member.fullname,
+                    }
+                ],
+                "tasks": [],
+            },
+        )
