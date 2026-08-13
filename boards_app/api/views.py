@@ -1,5 +1,8 @@
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 from rest_framework import status
+from rest_framework.exceptions import NotFound
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -11,9 +14,13 @@ from .permissions import (
 )
 from .serializers import (
     BoardDetailSerializer,
+    BoardMemberSerializer,
     BoardSerializer,
     BoardUpdateSerializer,
+    EmailCheckSerializer,
 )
+
+User = get_user_model()
 
 
 class BoardViewSet(ModelViewSet):
@@ -64,3 +71,20 @@ class BoardViewSet(ModelViewSet):
         else:
             classes = (IsAuthenticatedBoardUser,)
         return [permission() for permission in classes]
+
+class EmailCheckView(GenericAPIView):
+    """Return a registered user matching an email address."""
+
+    serializer_class = EmailCheckSerializer
+    permission_classes = (IsAuthenticatedBoardUser,)
+
+    def get(self, request):
+        serializer = self.get_serializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        user = User.objects.filter(email__iexact=email).first()
+
+        if user is None:
+            raise NotFound("Email not found.")
+
+        return Response(BoardMemberSerializer(user).data)

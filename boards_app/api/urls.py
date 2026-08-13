@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import BoardViewSet
+from .views import BoardViewSet, EmailCheckView
 
 app_name = "boards_app"
 
@@ -25,5 +25,10 @@ urlpatterns = [
         "boards/<int:board_id>/",
         board_detail,
         name="board-detail",
+    ),
+    path(
+        "email-check/",
+        EmailCheckView.as_view(),
+        name="email-check",
     ),
 ]

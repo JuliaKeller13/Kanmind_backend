@@ -108,3 +108,8 @@ class BoardUpdateSerializer(serializers.ModelSerializer):
             "owner_data",
             "members_data",
         )
+
+class EmailCheckSerializer(serializers.Serializer):
+    """Validate the email query parameter."""
+
+    email = serializers.EmailField()

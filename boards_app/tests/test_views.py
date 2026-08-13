@@ -28,6 +28,7 @@ class BoardViewSetTest(APITestCase):
             HTTP_AUTHORIZATION=f"Token {self.token.key}"
         )
         self.url = reverse("boards_app:board-list")
+        self.email_check_url = reverse("boards_app:email-check")
 
     def get_detail_url(self, board):
         """Return the detail URL for a board."""
@@ -432,4 +433,65 @@ class BoardViewSetTest(APITestCase):
         response = self.client.delete(url)
 
         self.assertEqual(response.status_code, 404)
-        
+
+    def test_email_check_returns_user(self):
+        """Return user data for an existing email address."""
+        response = self.client.get(
+            self.email_check_url,
+            {"email": self.member.email},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {
+                "id": self.member.id,
+                "email": self.member.email,
+                "fullname": self.member.fullname,
+            },
+        )
+
+    def test_email_check_requires_email(self):
+        """Reject requests without an email query parameter."""
+        response = self.client.get(self.email_check_url)
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_email_check_rejects_invalid_email(self):
+        """Reject invalid email addresses."""
+        response = self.client.get(
+            self.email_check_url,
+            {"email": "not-an-email"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_email_check_returns_not_found(self):
+        """Return not found for an unknown email address."""
+        response = self.client.get(
+            self.email_check_url,
+            {"email": "unknown@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_email_check_requires_authentication(self):
+        """Reject unauthenticated email checks."""
+        self.client.credentials()
+
+        response = self.client.get(
+            self.email_check_url,
+            {"email": self.member.email},
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_email_check_is_case_insensitive(self):
+        """Find users regardless of email letter casing."""
+        response = self.client.get(
+            self.email_check_url,
+            {"email": self.member.email.upper()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], self.member.id)
