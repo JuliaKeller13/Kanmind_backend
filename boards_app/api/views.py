@@ -5,7 +5,11 @@ from rest_framework.viewsets import ModelViewSet
 
 from ..models import Board
 from .permissions import HasBoardAccess, IsAuthenticatedBoardUser
-from .serializers import BoardDetailSerializer, BoardSerializer
+from .serializers import (
+    BoardDetailSerializer,
+    BoardSerializer,
+    BoardUpdateSerializer,
+)
 
 
 class BoardViewSet(ModelViewSet):
@@ -32,6 +36,8 @@ class BoardViewSet(ModelViewSet):
         """Return the serializer required by the current action."""
         if self.action == "retrieve":
             return BoardDetailSerializer
+        if self.action == "partial_update":
+            return BoardUpdateSerializer
         return BoardSerializer
 
     def create(self, request, *args, **kwargs):

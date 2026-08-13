@@ -217,3 +217,169 @@ class BoardViewSetTest(APITestCase):
                 "tasks": [],
             },
         )
+
+    def test_update_board_as_owner(self):
+        """Allow the owner to update title and members."""
+        board = Board.objects.create(
+            title="Old title",
+            owner=self.owner,
+        )
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {
+                "title": "Changed title",
+                "members": [self.member.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        board.refresh_from_db()
+        self.assertEqual(board.title, "Changed title")
+        self.assertIn(self.member, board.members.all())
+
+    def test_update_board_as_member(self):
+        """Allow a board member to update the board."""
+        board = Board.objects.create(
+            title="Member Board",
+            owner=self.member,
+        )
+        board.members.add(self.owner)
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {"title": "Updated by member"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        board.refresh_from_db()
+        self.assertEqual(board.title, "Updated by member")
+
+    def test_update_replaces_members(self):
+        """Replace existing members with the submitted member list."""
+        second_member = User.objects.create_user(
+            email="second@example.com",
+            password="testpassword",
+            fullname="Second Member",
+        )
+        board = Board.objects.create(
+            title="Board",
+            owner=self.owner,
+        )
+        board.members.add(self.member, second_member)
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {"members": [self.member.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            list(board.members.values_list("id", flat=True)),
+            [self.member.id],
+        )
+
+    def test_update_board_with_invalid_member(self):
+        """Reject an unknown member ID."""
+        board = Board.objects.create(
+            title="Board",
+            owner=self.owner,
+        )
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {"members": [999999]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_board_requires_authentication(self):
+        """Reject board updates by unauthenticated users."""
+        board = Board.objects.create(
+            title="Board",
+            owner=self.owner,
+        )
+        self.client.credentials()
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {"title": "Changed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_board_without_access(self):
+        """Reject updates by users without board access."""
+        other_user = User.objects.create_user(
+            email="other@example.com",
+            password="testpassword",
+            fullname="Other User",
+        )
+        board = Board.objects.create(
+            title="Private Board",
+            owner=other_user,
+        )
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {"title": "Changed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_unknown_board(self):
+        """Return not found for an unknown board ID."""
+        url = reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": 999999},
+        )
+
+        response = self.client.patch(
+            url,
+            {"title": "Changed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_board_response_data(self):
+        """Return owner and member data after an update."""
+        board = Board.objects.create(
+            title="Old title",
+            owner=self.owner,
+        )
+
+        response = self.client.patch(
+            self.get_detail_url(board),
+            {
+                "title": "Changed title",
+                "members": [self.member.id],
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "id": board.id,
+                "title": "Changed title",
+                "owner_data": {
+                    "id": self.owner.id,
+                    "email": self.owner.email,
+                    "fullname": self.owner.fullname,
+                },
+                "members_data": [
+                    {
+                        "id": self.member.id,
+                        "email": self.member.email,
+                        "fullname": self.member.fullname,
+                    }
+                ],
+            },
+        )

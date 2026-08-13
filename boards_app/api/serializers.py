@@ -80,3 +80,31 @@ class BoardDetailSerializer(serializers.ModelSerializer):
     def get_tasks(self, board):
         """Return tasks until task serialization is integrated."""
         return []
+
+class BoardUpdateSerializer(serializers.ModelSerializer):
+    """Serialize board updates and updated board data."""
+
+    members = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=User.objects.all(),
+        write_only=True,
+    )
+    owner_data = BoardMemberSerializer(
+        source="owner",
+        read_only=True,
+    )
+    members_data = BoardMemberSerializer(
+        source="members",
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = Board
+        fields = (
+            "id",
+            "title",
+            "members",
+            "owner_data",
+            "members_data",
+        )

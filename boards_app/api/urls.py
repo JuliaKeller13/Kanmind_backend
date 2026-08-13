@@ -14,6 +14,7 @@ board_list = BoardViewSet.as_view(
 board_detail = BoardViewSet.as_view(
     {
         "get": "retrieve",
+        "patch": "partial_update",
     }
 )
 
