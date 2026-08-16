@@ -8,20 +8,16 @@ from tasks_app.models import Task
 
 User = get_user_model()
 
-
 class TaskViewSetTest(APITestCase):
     """Test task API endpoints."""
 
     def setUp(self):
-        """Create users, a board, and authentication."""
+        """Create users, board, and authentication."""
         self.user = self._create_user("member@example.com", "Member")
         self.other_user = self._create_user("other@example.com", "Other")
         self.board = Board.objects.create(title="Project", owner=self.other_user)
         self.board.members.add(self.user)
-        self.token = Token.objects.create(user=self.user)
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Token {self.token.key}"
-        )
+        self._authenticate(self.user)
         self.url = reverse("tasks_app:task-list")
 
     @staticmethod
@@ -33,8 +29,15 @@ class TaskViewSetTest(APITestCase):
             fullname=fullname,
         )
 
+    def _authenticate(self, user):
+        """Authenticate the API client as the given user."""
+        token = Token.objects.get_or_create(user=user)[0]
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Token {token.key}"
+        )
+
     def _valid_data(self):
-        """Return valid task request data."""
+        """Return valid task creation data."""
         return {
             "board": self.board.id,
             "title": "Code Review",
@@ -44,6 +47,44 @@ class TaskViewSetTest(APITestCase):
             "assignee_id": self.user.id,
             "reviewer_id": self.user.id,
             "due_date": "2026-08-20",
+        }
+
+    def _update_data(self):
+        """Return valid task update data."""
+        return {
+            "title": "Code Review Finished",
+            "description": "Finish review and provide feedback",
+            "status": "done",
+            "priority": "high",
+            "assignee_id": self.user.id,
+            "reviewer_id": self.user.id,
+            "due_date": "2026-08-21",
+        }
+
+    def _create_task(self):
+        """Create a task belonging to the test board."""
+        return Task.objects.create(
+            board=self.board,
+            title="Old title",
+            description="Old description",
+            status=Task.Status.REVIEW,
+            priority=Task.Priority.MEDIUM,
+            due_date="2026-08-20",
+        )
+
+    def _detail_url(self, task):
+        """Return the detail URL for a task."""
+        return reverse(
+            "tasks_app:task-detail",
+            kwargs={"task_id": task.id},
+        )
+
+    def _user_data(self):
+        """Return serialized data for the test member."""
+        return {
+            "id": self.user.id,
+            "email": self.user.email,
+            "fullname": self.user.fullname,
         }
 
     def test_create_task(self):
@@ -67,35 +108,15 @@ class TaskViewSetTest(APITestCase):
             format="json",
         )
 
-        self.assertEqual(
-            response.data,
-            self._expected_response(response.data["id"]),
-        )
-
-    def _expected_response(self, task_id):
-        """Return the expected task response."""
-        user_data = {
-            "id": self.user.id,
-            "email": self.user.email,
-            "fullname": self.user.fullname,
-        }
-        return {
-            "id": task_id,
-            "board": self.board.id,
-            "title": "Code Review",
-            "description": "Review the pull request",
-            "status": "review",
-            "priority": "medium",
-            "assignee": user_data,
-            "reviewer": user_data,
-            "due_date": "2026-08-20",
-            "comments_count": 0,
-        }
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["title"], "Code Review")
+        self.assertEqual(response.data["assignee"], self._user_data())
+        self.assertEqual(response.data["reviewer"], self._user_data())
+        self.assertEqual(response.data["comments_count"], 0)
 
     def test_create_task_requires_authentication(self):
         """Reject task creation by unauthenticated users."""
         self.client.credentials()
-
         response = self.client.post(
             self.url,
             self._valid_data(),
@@ -108,7 +129,6 @@ class TaskViewSetTest(APITestCase):
     def test_create_task_requires_board_membership(self):
         """Reject task creation by non-board members."""
         self._authenticate(self.other_user)
-
         response = self.client.post(
             self.url,
             self._valid_data(),
@@ -118,23 +138,11 @@ class TaskViewSetTest(APITestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Task.objects.exists())
 
-    def _authenticate(self, user):
-        """Authenticate the API client as the given user."""
-        token = Token.objects.create(user=user)
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Token {token.key}"
-        )
-
     def test_create_task_with_unknown_board(self):
         """Return not found for an unknown board ID."""
         data = self._valid_data()
         data["board"] = 999999
-
-        response = self.client.post(
-            self.url,
-            data,
-            format="json",
-        )
+        response = self.client.post(self.url, data, format="json")
 
         self.assertEqual(response.status_code, 404)
         self.assertFalse(Task.objects.exists())
@@ -143,26 +151,7 @@ class TaskViewSetTest(APITestCase):
         """Reject task creation without a board."""
         data = self._valid_data()
         data.pop("board")
-
-        response = self.client.post(
-            self.url,
-            data,
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(Task.objects.exists())
-
-    def test_create_task_with_invalid_assignee(self):
-        """Reject an assignee who is not a board member."""
-        data = self._valid_data()
-        data["assignee_id"] = self.other_user.id
-
-        response = self.client.post(
-            self.url,
-            data,
-            format="json",
-        )
+        response = self.client.post(self.url, data, format="json")
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Task.objects.exists())
@@ -171,12 +160,144 @@ class TaskViewSetTest(APITestCase):
         """Reject an invalid board value."""
         data = self._valid_data()
         data["board"] = "abc"
+        response = self.client.post(self.url, data, format="json")
 
-        response = self.client.post(
-            self.url,
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Task.objects.exists())
+
+    def test_create_task_with_invalid_assignee(self):
+        """Reject an assignee who is not a board member."""
+        data = self._valid_data()
+        data["assignee_id"] = self.other_user.id
+        response = self.client.post(self.url, data, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Task.objects.exists())
+
+    def test_update_task(self):
+        """Allow a board member to update a task."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            self._update_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.title, "Code Review Finished")
+        self.assertEqual(task.status, Task.Status.DONE)
+
+    def test_update_task_response(self):
+        """Return the documented task update response."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            self._update_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.data["id"], task.id)
+        self.assertEqual(response.data["assignee"], self._user_data())
+        self.assertEqual(response.data["reviewer"], self._user_data())
+        self.assertNotIn("board", response.data)
+        self.assertNotIn("comments_count", response.data)
+
+    def test_update_task_partially(self):
+        """Update only fields included in the PATCH request."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.DONE)
+        self.assertEqual(task.title, "Old title")
+
+    def test_update_task_requires_authentication(self):
+        """Reject task updates by unauthenticated users."""
+        task = self._create_task()
+        self.client.credentials()
+        response = self.client.patch(
+            self._detail_url(task),
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_task_requires_board_membership(self):
+        """Reject updates by users outside the board."""
+        task = self._create_task()
+        self._authenticate(self.other_user)
+        response = self.client.patch(
+            self._detail_url(task),
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_unknown_task(self):
+        """Return not found for an unknown task ID."""
+        url = reverse(
+            "tasks_app:task-detail",
+            kwargs={"task_id": 999999},
+        )
+        response = self.client.patch(
+            url,
+            {"status": "done"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_update_rejects_board_change(self):
+        """Reject attempts to move a task to another board."""
+        task = self._create_task()
+        data = {"board": 999999}
+        response = self.client.patch(
+            self._detail_url(task),
             data,
             format="json",
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertFalse(Task.objects.exists())
+        task.refresh_from_db()
+        self.assertEqual(task.board, self.board)
+
+    def test_update_rejects_invalid_status(self):
+        """Reject unsupported task status values."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            {"status": "waiting"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_rejects_invalid_assignee(self):
+        """Reject assignees outside the task board."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            {"assignee_id": self.other_user.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_rejects_invalid_reviewer(self):
+        """Reject reviewers outside the task board."""
+        task = self._create_task()
+        response = self.client.patch(
+            self._detail_url(task),
+            {"reviewer_id": self.other_user.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)

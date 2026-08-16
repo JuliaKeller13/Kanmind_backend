@@ -6,8 +6,8 @@ from rest_framework.viewsets import ModelViewSet
 from boards_app.models import Board
 
 from ..models import Task
-from .permissions import IsAuthenticatedTaskUser
-from .serializers import TaskSerializer
+from .permissions import HasTaskBoardAccess, IsAuthenticatedTaskUser
+from .serializers import TaskSerializer, TaskUpdateSerializer
 
 
 class TaskViewSet(ModelViewSet):
@@ -16,6 +16,20 @@ class TaskViewSet(ModelViewSet):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = (IsAuthenticatedTaskUser,)
+    lookup_url_kwarg = "task_id"
+
+    def get_serializer_class(self):
+        """Return the serializer required by the current action."""
+        if self.action == "partial_update":
+            return TaskUpdateSerializer
+        return TaskSerializer
+
+    def get_permissions(self):
+        """Return permissions required for the current action."""
+        classes = (IsAuthenticatedTaskUser,)
+        if self.action == "partial_update":
+            classes += (HasTaskBoardAccess,)
+        return [permission() for permission in classes]
 
     def create(self, request, *args, **kwargs):
         """Create a task for a board member."""

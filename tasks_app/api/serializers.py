@@ -6,6 +6,13 @@ from ..models import Task
 User = get_user_model()
 
 
+def validate_board_member(board, user, field):
+    """Ensure a task user belongs to the selected board."""
+    if user is not None and not board.members.filter(id=user.id).exists():
+        raise serializers.ValidationError(
+            {field: "User must be a member of the board."}
+        )
+
 class TaskUserSerializer(serializers.ModelSerializer):
     """Serialize basic user information for task relations."""
 
@@ -16,7 +23,6 @@ class TaskUserSerializer(serializers.ModelSerializer):
             "email",
             "fullname",
         )
-
 
 class TaskSerializer(serializers.ModelSerializer):
     """Serialize task creation and task response data."""
@@ -59,18 +65,64 @@ class TaskSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         """Ensure assignee and reviewer belong to the selected board."""
         board = attrs.get("board")
-        self._validate_board_member(board, attrs.get("assignee"), "assignee_id")
-        self._validate_board_member(board, attrs.get("reviewer"), "reviewer_id")
+        validate_board_member(board, attrs.get("assignee"), "assignee_id")
+        validate_board_member(board, attrs.get("reviewer"), "reviewer_id")
         return attrs
-
-    @staticmethod
-    def _validate_board_member(board, user, field):
-        """Ensure a task user belongs to the selected board."""
-        if user is not None and not board.members.filter(id=user.id).exists():
-            raise serializers.ValidationError(
-                {field: "User must be a member of the board."}
-            )
 
     def get_comments_count(self, task):
         """Return the number of comments assigned to the task."""
         return 0
+
+
+class TaskUpdateSerializer(serializers.ModelSerializer):
+    """Serialize partial task updates."""
+
+    board = serializers.IntegerField(
+        write_only=True,
+        required=False,
+    )
+    assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source="assignee",
+        allow_null=True,
+        required=False,
+        write_only=True,
+    )
+    reviewer_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source="reviewer",
+        allow_null=True,
+        required=False,
+        write_only=True,
+    )
+    assignee = TaskUserSerializer(read_only=True)
+    reviewer = TaskUserSerializer(read_only=True)
+
+    class Meta:
+        model = Task
+        fields = (
+            "id",
+            "board",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assignee_id",
+            "reviewer_id",
+            "assignee",
+            "reviewer",
+            "due_date",
+        )
+
+    def validate_board(self, value):
+        """Reject attempts to change the task board."""
+        raise serializers.ValidationError(
+            "Changing the board is not allowed."
+        )
+
+    def validate(self, attrs):
+        """Ensure task users remain members of the task board."""
+        board = self.instance.board
+        validate_board_member(board, attrs.get("assignee"), "assignee_id")
+        validate_board_member(board, attrs.get("reviewer"), "reviewer_id")
+        return attrs
