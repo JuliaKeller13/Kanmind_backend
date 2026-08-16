@@ -9,10 +9,13 @@ from .serializers import LoginSerializer, RegistrationSerializer
 
 
 class RegistrationView(GenericAPIView):
+    """Register a new user and return an authentication token."""
+
     serializer_class = RegistrationSerializer
     permission_classes = (AllowAny,)
 
     def post(self, request):
+        """Create a user account and return authentication data."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -25,10 +28,13 @@ class RegistrationView(GenericAPIView):
 
 
 class LoginView(GenericAPIView):
+    """Authenticate a user and return an authentication token."""
+
     serializer_class = LoginSerializer
     permission_classes = (AllowAny,)
 
     def post(self, request):
+        """Authenticate credentials and return authentication data."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]

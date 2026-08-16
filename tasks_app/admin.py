@@ -11,6 +11,7 @@ class TaskAdmin(admin.ModelAdmin):
         "id",
         "title",
         "board",
+        "created_by",
         "status",
         "priority",
         "assignee",
@@ -21,6 +22,7 @@ class TaskAdmin(admin.ModelAdmin):
     search_fields = (
         "title",
         "board__title",
+        "created_by__email",
         "assignee__email",
         "reviewer__email",
     )

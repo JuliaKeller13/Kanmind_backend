@@ -7,6 +7,8 @@ from .managers import UserManager
 
 
 class User(AbstractUser):
+    """Represent an application user authenticated by email."""
+
     username = None
 
     fullname = models.CharField(max_length=255)
@@ -23,4 +25,5 @@ class User(AbstractUser):
         verbose_name_plural = "users"
 
     def __str__(self):
+        """Return the user's email address."""
         return self.email

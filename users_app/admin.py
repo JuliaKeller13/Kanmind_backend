@@ -6,6 +6,8 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    """Configure application users for the Django admin."""
+
     ordering = ("email",)
     list_display = ("email", "fullname", "is_staff", "is_active")
     search_fields = ("email", "fullname")
