@@ -65,6 +65,7 @@ class TaskViewSetTest(APITestCase):
         """Create a task belonging to the test board."""
         return Task.objects.create(
             board=self.board,
+            created_by=self.user,
             title="Old title",
             description="Old description",
             status=Task.Status.REVIEW,
@@ -99,6 +100,7 @@ class TaskViewSetTest(APITestCase):
         task = Task.objects.get()
         self.assertEqual(task.board, self.board)
         self.assertEqual(task.assignee, self.user)
+        self.assertEqual(task.created_by, self.user)
 
     def test_create_task_response(self):
         """Return the documented task response."""
@@ -299,5 +301,72 @@ class TaskViewSetTest(APITestCase):
             {"reviewer_id": self.other_user.id},
             format="json",
         )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_delete_task_as_creator(self):
+        """Allow the task creator to delete the task."""
+        task = self._create_task()
+
+        response = self.client.delete(self._detail_url(task))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Task.objects.filter(id=task.id).exists())
+        self.assertIsNone(response.data)
+
+    def test_delete_task_as_board_owner(self):
+        """Allow the board owner to delete the task."""
+        task = self._create_task()
+        self._authenticate(self.other_user)
+
+        response = self.client.delete(self._detail_url(task))
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Task.objects.filter(id=task.id).exists())
+
+    def test_delete_task_as_board_member(self):
+        """Reject deletion by a member who is not creator or owner."""
+        member = self._create_user(
+            "second-member@example.com",
+            "Second Member",
+        )
+        self.board.members.add(member)
+        task = self._create_task()
+        self._authenticate(member)
+
+        response = self.client.delete(self._detail_url(task))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+    def test_delete_task_requires_authentication(self):
+        """Reject task deletion by unauthenticated users."""
+        task = self._create_task()
+        self.client.credentials()
+
+        response = self.client.delete(self._detail_url(task))
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(Task.objects.filter(id=task.id).exists())
+
+    def test_delete_unknown_task(self):
+        """Return not found when deleting an unknown task."""
+        url = reverse(
+            "tasks_app:task-detail",
+            kwargs={"task_id": 999999},
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_task_with_invalid_id(self):
+        """Reject an invalid task ID."""
+        url = reverse(
+            "tasks_app:task-detail",
+            kwargs={"task_id": "abc"},
+        )
+
+        response = self.client.delete(url)
 
         self.assertEqual(response.status_code, 400)

@@ -1,12 +1,20 @@
 from rest_framework import status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import (
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from boards_app.models import Board
 
 from ..models import Task
-from .permissions import HasTaskBoardAccess, IsAuthenticatedTaskUser
+from .permissions import (
+    HasTaskBoardAccess,
+    IsAuthenticatedTaskUser,
+    IsTaskCreatorOrBoardOwner,
+)
 from .serializers import TaskSerializer, TaskUpdateSerializer
 
 
@@ -29,6 +37,8 @@ class TaskViewSet(ModelViewSet):
         classes = (IsAuthenticatedTaskUser,)
         if self.action == "partial_update":
             classes += (HasTaskBoardAccess,)
+        elif self.action == "destroy":
+            classes += (IsTaskCreatorOrBoardOwner,)
         return [permission() for permission in classes]
 
     def create(self, request, *args, **kwargs):
@@ -37,12 +47,26 @@ class TaskViewSet(ModelViewSet):
         self._check_board_access(board, request.user)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        task = serializer.save()
+        task = serializer.save(created_by=request.user)
 
         return Response(
             self.get_serializer(task).data,
             status=status.HTTP_201_CREATED,
         )
+
+    def get_object(self):
+        """Return the requested task and validate its ID."""
+        task_id = self.kwargs[self.lookup_url_kwarg]
+        if not str(task_id).isdigit():
+            raise ValidationError({"task_id": "Invalid task ID."})
+
+        try:
+            task = Task.objects.get(pk=task_id)
+        except Task.DoesNotExist:
+            raise NotFound("Task not found.") from None
+
+        self.check_object_permissions(self.request, task)
+        return task
 
     @staticmethod
     def _get_board(board_id):

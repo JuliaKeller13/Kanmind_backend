@@ -23,6 +23,13 @@ class Task(models.Model):
         on_delete=models.CASCADE,
         related_name="tasks",
     )
+    created_by = models.ForeignKey(
+    settings.AUTH_USER_MODEL,
+    on_delete=models.SET_NULL,
+    related_name="created_tasks",
+    null=True,
+    editable=False,
+    )
     title = models.CharField(max_length=255)
     description = models.TextField()
     status = models.CharField(
