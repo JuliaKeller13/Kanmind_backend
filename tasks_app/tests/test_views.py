@@ -370,3 +370,73 @@ class TaskViewSetTest(APITestCase):
         response = self.client.delete(url)
 
         self.assertEqual(response.status_code, 400)
+
+    def test_assigned_to_me_returns_assigned_tasks(self):
+        """Return only tasks assigned to the authenticated user."""
+        assigned_task = self._create_task()
+        assigned_task.assignee = self.user
+        assigned_task.save()
+
+        other_task = self._create_task()
+        other_task.assignee = self.other_user
+        other_task.save()
+
+        url = reverse("tasks_app:assigned-to-me")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        task_ids = {task["id"] for task in response.data}
+        self.assertEqual(task_ids, {assigned_task.id})
+
+    def test_assigned_to_me_requires_authentication(self):
+        """Reject unauthenticated access to assigned tasks."""
+        self.client.credentials()
+        url = reverse("tasks_app:assigned-to-me")
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_assigned_to_me_returns_empty_list(self):
+        """Return an empty list when no tasks are assigned."""
+        url = reverse("tasks_app:assigned-to-me")
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_reviewing_returns_review_tasks(self):
+        """Return only tasks reviewed by the authenticated user."""
+        review_task = self._create_task()
+        review_task.reviewer = self.user
+        review_task.save()
+
+        other_task = self._create_task()
+        other_task.reviewer = self.other_user
+        other_task.save()
+
+        url = reverse("tasks_app:reviewing")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        task_ids = {task["id"] for task in response.data}
+        self.assertEqual(task_ids, {review_task.id})
+
+    def test_reviewing_requires_authentication(self):
+        """Reject unauthenticated access to reviewing tasks."""
+        self.client.credentials()
+        url = reverse("tasks_app:reviewing")
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_reviewing_returns_empty_list(self):
+        """Return an empty list when no tasks are under review."""
+        url = reverse("tasks_app:reviewing")
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])

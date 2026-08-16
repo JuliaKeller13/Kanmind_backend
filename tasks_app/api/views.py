@@ -4,6 +4,7 @@ from rest_framework.exceptions import (
     PermissionDenied,
     ValidationError,
 )
+from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -87,3 +88,40 @@ class TaskViewSet(ModelViewSet):
             return
         if not board.members.filter(id=user.id).exists():
             raise PermissionDenied("You must be a board member.")
+
+class AssignedTasksView(GenericAPIView):
+    """Return tasks assigned to the authenticated user."""
+
+    serializer_class = TaskSerializer
+    permission_classes = (IsAuthenticatedTaskUser,)
+
+    def get_queryset(self):
+        """Return tasks assigned to the current user."""
+        return Task.objects.filter(assignee=self.request.user)
+
+    def get(self, request):
+        """Return serialized assigned tasks."""
+        serializer = self.get_serializer(
+            self.get_queryset(),
+            many=True,
+        )
+        return Response(serializer.data)
+
+
+class ReviewingTasksView(GenericAPIView):
+    """Return tasks reviewed by the authenticated user."""
+
+    serializer_class = TaskSerializer
+    permission_classes = (IsAuthenticatedTaskUser,)
+
+    def get_queryset(self):
+        """Return tasks reviewed by the current user."""
+        return Task.objects.filter(reviewer=self.request.user)
+
+    def get(self, request):
+        """Return serialized reviewing tasks."""
+        serializer = self.get_serializer(
+            self.get_queryset(),
+            many=True,
+        )
+        return Response(serializer.data)
