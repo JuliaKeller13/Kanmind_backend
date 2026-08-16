@@ -4,6 +4,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from boards_app.models import Board
+from tasks_app.api.serializers import TaskSerializer
 from tasks_app.models import Task
 
 User = get_user_model()
@@ -440,3 +441,122 @@ class TaskViewSetTest(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])
+
+    def test_create_comment(self):
+        """Create a comment as a board member."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        response = self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["content"], "New comment")
+        self.assertEqual(response.data["author"], self.user.fullname)
+
+    def test_create_comment_sets_author_and_task(self):
+        """Store the authenticated user and task on the comment."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        comment = task.comments.get()
+        self.assertEqual(comment.author, self.user)
+        self.assertEqual(comment.task, task)
+
+    def test_create_comment_rejects_empty_content(self):
+        """Reject comments with empty content."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        response = self.client.post(
+            url,
+            {"content": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_comment_requires_authentication(self):
+        """Reject comment creation by unauthenticated users."""
+        task = self._create_task()
+        self.client.credentials()
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        response = self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_comment_requires_board_membership(self):
+        """Reject comment creation by non-board members."""
+        task = self._create_task()
+        self._authenticate(self.other_user)
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        response = self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_comment_for_unknown_task(self):
+        """Return not found for an unknown task."""
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": 999999},
+        )
+
+        response = self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_comment_increases_comments_count(self):
+        """Increase the serialized task comment count."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
+        self.client.post(
+            url,
+            {"content": "New comment"},
+            format="json",
+        )
+
+        serializer = TaskSerializer(task)
+
+        self.assertEqual(serializer.data["comments_count"], 1)

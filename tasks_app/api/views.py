@@ -16,7 +16,11 @@ from .permissions import (
     IsAuthenticatedTaskUser,
     IsTaskCreatorOrBoardOwner,
 )
-from .serializers import TaskSerializer, TaskUpdateSerializer
+from .serializers import (
+    CommentSerializer,
+    TaskSerializer,
+    TaskUpdateSerializer,
+)
 
 
 class TaskViewSet(ModelViewSet):
@@ -125,3 +129,33 @@ class ReviewingTasksView(GenericAPIView):
             many=True,
         )
         return Response(serializer.data)
+
+class TaskCommentListCreateView(GenericAPIView):
+    """Create comments belonging to a task."""
+
+    serializer_class = CommentSerializer
+    permission_classes = (
+        IsAuthenticatedTaskUser,
+        HasTaskBoardAccess,
+    )
+
+    def post(self, request, task_id):
+        """Create a comment as an authenticated board member."""
+        task = self._get_task(task_id)
+        self.check_object_permissions(request, task)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = serializer.save(task=task, author=request.user)
+
+        return Response(
+            self.get_serializer(comment).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @staticmethod
+    def _get_task(task_id):
+        """Return the requested task or raise not found."""
+        try:
+            return Task.objects.get(pk=task_id)
+        except (Task.DoesNotExist, ValueError, TypeError):
+            raise NotFound("Task not found.") from None

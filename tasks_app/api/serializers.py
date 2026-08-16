@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from ..models import Task
+from ..models import Comment, Task
 
 User = get_user_model()
 
@@ -71,7 +71,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_comments_count(self, task):
         """Return the number of comments assigned to the task."""
-        return 0
+        return task.comments.count()
 
 
 class TaskUpdateSerializer(serializers.ModelSerializer):
@@ -126,3 +126,28 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         validate_board_member(board, attrs.get("assignee"), "assignee_id")
         validate_board_member(board, attrs.get("reviewer"), "reviewer_id")
         return attrs
+
+class CommentSerializer(serializers.ModelSerializer):
+    """Serialize task comments."""
+
+    author = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = (
+            "id",
+            "created_at",
+            "author",
+            "content",
+        )
+        read_only_fields = (
+            "id",
+            "created_at",
+            "author",
+        )
+
+    def get_author(self, comment):
+        """Return the comment author's full name."""
+        if comment.author is None:
+            return None
+        return comment.author.fullname

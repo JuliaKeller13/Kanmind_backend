@@ -2,7 +2,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from boards_app.models import Board
-from tasks_app.api.serializers import TaskSerializer
+from tasks_app.api.serializers import CommentSerializer, TaskSerializer
+from tasks_app.models import Comment, Task
 
 User = get_user_model()
 
@@ -144,3 +145,28 @@ class TaskSerializerTest(TestCase):
 
         self.assertIsNone(task.assignee)
         self.assertIsNone(task.reviewer)
+
+    def test_comment_serializer_without_author(self):
+        """Return null when a comment has no author."""
+        task = self._create_task()
+        comment = Comment.objects.create(
+            task=task,
+            author=None,
+            content="Anonymous comment",
+        )
+
+        serializer = CommentSerializer(comment)
+
+        self.assertIsNone(serializer.data["author"])
+
+    def _create_task(self):
+        """Create a task for serializer tests."""
+        return Task.objects.create(
+            board=self.board,
+            created_by=self.owner,
+            title="Test Task",
+            description="Test description",
+            status=Task.Status.TO_DO,
+            priority=Task.Priority.LOW,
+            due_date="2026-08-20",
+        )
