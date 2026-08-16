@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from tasks_app.models import Task
+
 from ..models import Board
 
 User = get_user_model()
@@ -49,23 +51,57 @@ class BoardSerializer(serializers.ModelSerializer):
         return board.members.count()
 
     def get_ticket_count(self, board):
-        """Return the number of tasks on a newly created board."""
-        return 0
+        """Return the total number of tasks on the board."""
+        return board.tasks.count()
 
     def get_tasks_to_do_count(self, board):
-        """Return the number of to-do tasks on a newly created board."""
-        return 0
+        """Return the number of to-do tasks on the board."""
+        return board.tasks.filter(
+            status=Task.Status.TO_DO,
+        ).count()
 
     def get_tasks_high_prio_count(self, board):
-        """Return the number of high-priority tasks on a new board."""
-        return 0
+        """Return the number of high-priority tasks on the board."""
+        return board.tasks.filter(
+            priority=Task.Priority.HIGH,
+        ).count()
+
+class BoardTaskSerializer(serializers.ModelSerializer):
+    """Serialize task information inside a board detail response."""
+
+    assignee = BoardMemberSerializer(read_only=True)
+    reviewer = BoardMemberSerializer(read_only=True)
+    comments_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Task
+        fields = (
+            "id",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "assignee",
+            "reviewer",
+            "due_date",
+            "comments_count",
+        )
+
+    def get_comments_count(self, task):
+        """Return the number of comments assigned to the task."""
+        return task.comments.count()
 
 class BoardDetailSerializer(serializers.ModelSerializer):
     """Serialize detailed board information."""
 
-    members = BoardMemberSerializer(many=True, read_only=True)
-    owner_id = serializers.IntegerField(read_only=True)
-    tasks = serializers.SerializerMethodField()
+    members = BoardMemberSerializer(
+        many=True,
+        read_only=True,
+    )
+    tasks = BoardTaskSerializer(
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = Board
@@ -76,10 +112,6 @@ class BoardDetailSerializer(serializers.ModelSerializer):
             "members",
             "tasks",
         )
-
-    def get_tasks(self, board):
-        """Return tasks until task serialization is integrated."""
-        return []
 
 class BoardUpdateSerializer(serializers.ModelSerializer):
     """Serialize board updates and updated board data."""

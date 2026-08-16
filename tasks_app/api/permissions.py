@@ -21,3 +21,9 @@ class IsTaskCreatorOrBoardOwner(BasePermission):
             task.created_by_id == user_id
             or task.board.owner_id == user_id
         )
+
+class IsCommentAuthor(BasePermission):
+    """Allow comment deletion only to its author."""
+
+    def has_object_permission(self, request, view, comment):
+        return comment.author_id == request.user.id

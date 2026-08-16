@@ -1,0 +1,16 @@
+[run]
+source =
+    users_app
+    boards_app
+    tasks_app
+    core
+
+omit =
+    */migrations/*
+    */tests/*
+    */asgi.py
+    */wsgi.py
+
+[report]
+show_missing = True
+skip_covered = False

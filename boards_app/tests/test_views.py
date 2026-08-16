@@ -4,6 +4,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from boards_app.models import Board
+from tasks_app.models import Comment, Task
 
 User = get_user_model()
 
@@ -495,3 +496,126 @@ class BoardViewSetTest(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], self.member.id)
+
+    def _create_board_task(self, board, status, priority):
+        """Create a task for board counter tests."""
+        return Task.objects.create(
+            board=board,
+            created_by=self.owner,
+            title="Counter Task",
+            description="Test description",
+            status=status,
+            priority=priority,
+            due_date="2026-08-20",
+        )
+
+    def test_board_list_returns_task_counts(self):
+        """Return task statistics for each board."""
+        board = self._create_board()
+        self._create_board_task(board, Task.Status.TO_DO, Task.Priority.HIGH)
+        self._create_board_task(board, Task.Status.IN_PROGRESS, Task.Priority.HIGH)
+        self._create_board_task(board, Task.Status.TO_DO, Task.Priority.LOW)
+
+        response = self.client.get(reverse("boards_app:board-list"))
+
+        self.assertEqual(response.status_code, 200)
+        data = next(item for item in response.data if item["id"] == board.id)
+        self.assertEqual(data["ticket_count"], 3)
+        self.assertEqual(data["tasks_to_do_count"], 2)
+        self.assertEqual(data["tasks_high_prio_count"], 2)
+
+    def _create_board(self):
+        """Create a board for view tests."""
+        return Board.objects.create(
+            title="Counter Board",
+            owner=self.owner,
+        )
+
+    def test_board_detail_returns_tasks(self):
+        """Return task data inside the board detail response."""
+        board = self._create_board()
+        board.members.add(self.member)
+        task = Task.objects.create(
+            board=board,
+            created_by=self.owner,
+            title="Board Detail Task",
+            description="Task description",
+            status=Task.Status.TO_DO,
+            priority=Task.Priority.HIGH,
+            assignee=self.member,
+            reviewer=self.member,
+            due_date="2026-08-20",
+        )
+        Comment.objects.create(
+            task=task,
+            author=self.member,
+            content="First comment",
+        )
+        Comment.objects.create(
+            task=task,
+            author=self.owner,
+            content="Second comment",
+        )
+        url = reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": board.id},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["tasks"]), 1)
+
+        task_data = response.data["tasks"][0]
+        self.assertEqual(task_data["id"], task.id)
+        self.assertEqual(task_data["title"], "Board Detail Task")
+        self.assertEqual(task_data["description"], "Task description")
+        self.assertEqual(task_data["status"], Task.Status.TO_DO)
+        self.assertEqual(task_data["priority"], Task.Priority.HIGH)
+        self.assertEqual(task_data["due_date"], "2026-08-20")
+        self.assertEqual(task_data["comments_count"], 2)
+
+        self.assertEqual(
+            task_data["assignee"],
+            {
+                "id": self.member.id,
+                "email": self.member.email,
+                "fullname": self.member.fullname,
+            },
+        )
+        self.assertEqual(
+            task_data["reviewer"],
+            {
+                "id": self.member.id,
+                "email": self.member.email,
+                "fullname": self.member.fullname,
+            },
+        )
+
+    def test_board_detail_returns_only_its_tasks(self):
+        """Exclude tasks belonging to other boards."""
+        board = self._create_board()
+        other_board = Board.objects.create(
+            title="Other Board",
+            owner=self.owner,
+        )
+        own_task = self._create_board_task(
+            board,
+            Task.Status.TO_DO,
+            Task.Priority.LOW,
+        )
+        self._create_board_task(
+            other_board,
+            Task.Status.DONE,
+            Task.Priority.HIGH,
+        )
+        url = reverse(
+            "boards_app:board-detail",
+            kwargs={"board_id": board.id},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["tasks"]), 1)
+        self.assertEqual(response.data["tasks"][0]["id"], own_task.id)

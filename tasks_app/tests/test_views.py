@@ -81,6 +81,13 @@ class TaskViewSetTest(APITestCase):
             kwargs={"task_id": task.id},
         )
 
+    def _comments_url(self, task):
+        """Return the comments URL for a task."""
+        return reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": task.id},
+        )
+
     def _user_data(self):
         """Return serialized data for the test member."""
         return {
@@ -560,3 +567,221 @@ class TaskViewSetTest(APITestCase):
         serializer = TaskSerializer(task)
 
         self.assertEqual(serializer.data["comments_count"], 1)
+
+    def test_list_task_comments(self):
+        """Return all comments belonging to a task."""
+        task = self._create_task()
+        first_comment = task.comments.create(
+            author=self.user,
+            content="First comment",
+        )
+        second_comment = task.comments.create(
+            author=self.user,
+            content="Second comment",
+        )
+
+        response = self.client.get(self._comments_url(task))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]["id"], first_comment.id)
+        self.assertEqual(response.data[1]["id"], second_comment.id)
+        self.assertEqual(response.data[0]["author"], self.user.fullname)
+
+
+    def test_list_comments_only_for_requested_task(self):
+        """Return comments only for the requested task."""
+        task = self._create_task()
+        other_task = self._create_task()
+
+        task.comments.create(
+            author=self.user,
+            content="Requested task comment",
+        )
+        other_task.comments.create(
+            author=self.user,
+            content="Other task comment",
+        )
+
+        response = self.client.get(self._comments_url(task))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(
+            response.data[0]["content"],
+            "Requested task comment",
+        )
+
+
+    def test_list_comments_returns_empty_list(self):
+        """Return an empty list when the task has no comments."""
+        task = self._create_task()
+
+        response = self.client.get(self._comments_url(task))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+
+    def test_list_comments_requires_authentication(self):
+        """Reject unauthenticated access to task comments."""
+        task = self._create_task()
+        self.client.credentials()
+
+        response = self.client.get(self._comments_url(task))
+
+        self.assertEqual(response.status_code, 401)
+
+
+    def test_list_comments_requires_board_membership(self):
+        """Reject comment access by users outside the board."""
+        task = self._create_task()
+        self._authenticate(self.other_user)
+
+        response = self.client.get(self._comments_url(task))
+
+        self.assertEqual(response.status_code, 403)
+
+
+    def test_list_comments_for_unknown_task(self):
+        """Return not found for an unknown task."""
+        url = reverse(
+            "tasks_app:task-comments",
+            kwargs={"task_id": 999999},
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_own_comment(self):
+        """Allow the comment author to delete the comment."""
+        task = self._create_task()
+        comment = task.comments.create(
+            author=self.user,
+            content="Delete me",
+        )
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": comment.id,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(task.comments.filter(id=comment.id).exists())
+
+
+    def test_delete_comment_requires_authentication(self):
+        """Reject comment deletion by unauthenticated users."""
+        task = self._create_task()
+        comment = task.comments.create(
+            author=self.user,
+            content="Protected comment",
+        )
+        self.client.credentials()
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": comment.id,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(task.comments.filter(id=comment.id).exists())
+
+
+    def test_delete_comment_by_other_user(self):
+        """Reject deletion by a user who is not the author."""
+        task = self._create_task()
+        comment = task.comments.create(
+            author=self.user,
+            content="Protected comment",
+        )
+        self._authenticate(self.other_user)
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": comment.id,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(task.comments.filter(id=comment.id).exists())
+
+
+    def test_delete_unknown_comment(self):
+        """Return not found for an unknown comment."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": 999999,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 404)
+
+
+    def test_delete_comment_from_wrong_task(self):
+        """Return not found when the comment belongs to another task."""
+        task = self._create_task()
+        other_task = self._create_task()
+        comment = other_task.comments.create(
+            author=self.user,
+            content="Other task comment",
+        )
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": comment.id,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 404)
+
+
+    def test_delete_comment_with_invalid_task_id(self):
+        """Reject a malformed task ID."""
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": "abc",
+                "comment_id": 1,
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 400)
+
+
+    def test_delete_comment_with_invalid_comment_id(self):
+        """Reject a malformed comment ID."""
+        task = self._create_task()
+        url = reverse(
+            "tasks_app:task-comment-detail",
+            kwargs={
+                "task_id": task.id,
+                "comment_id": "abc",
+            },
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 400)

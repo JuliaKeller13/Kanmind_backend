@@ -13,6 +13,7 @@ def validate_board_member(board, user, field):
             {field: "User must be a member of the board."}
         )
 
+
 class TaskUserSerializer(serializers.ModelSerializer):
     """Serialize basic user information for task relations."""
 
@@ -23,6 +24,7 @@ class TaskUserSerializer(serializers.ModelSerializer):
             "email",
             "fullname",
         )
+
 
 class TaskSerializer(serializers.ModelSerializer):
     """Serialize task creation and task response data."""

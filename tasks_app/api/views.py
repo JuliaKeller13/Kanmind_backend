@@ -10,10 +10,11 @@ from rest_framework.viewsets import ModelViewSet
 
 from boards_app.models import Board
 
-from ..models import Task
+from ..models import Comment, Task
 from .permissions import (
     HasTaskBoardAccess,
     IsAuthenticatedTaskUser,
+    IsCommentAuthor,
     IsTaskCreatorOrBoardOwner,
 )
 from .serializers import (
@@ -93,6 +94,7 @@ class TaskViewSet(ModelViewSet):
         if not board.members.filter(id=user.id).exists():
             raise PermissionDenied("You must be a board member.")
 
+
 class AssignedTasksView(GenericAPIView):
     """Return tasks assigned to the authenticated user."""
 
@@ -130,8 +132,9 @@ class ReviewingTasksView(GenericAPIView):
         )
         return Response(serializer.data)
 
+
 class TaskCommentListCreateView(GenericAPIView):
-    """Create comments belonging to a task."""
+    """List and create comments belonging to a task."""
 
     serializer_class = CommentSerializer
     permission_classes = (
@@ -139,10 +142,18 @@ class TaskCommentListCreateView(GenericAPIView):
         HasTaskBoardAccess,
     )
 
+    def get(self, request, task_id):
+        """Return all comments belonging to the task."""
+        task = self._get_accessible_task(request, task_id)
+        serializer = self.get_serializer(
+            task.comments.all(),
+            many=True,
+        )
+        return Response(serializer.data)
+
     def post(self, request, task_id):
         """Create a comment as an authenticated board member."""
-        task = self._get_task(task_id)
-        self.check_object_permissions(request, task)
+        task = self._get_accessible_task(request, task_id)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         comment = serializer.save(task=task, author=request.user)
@@ -152,6 +163,12 @@ class TaskCommentListCreateView(GenericAPIView):
             status=status.HTTP_201_CREATED,
         )
 
+    def _get_accessible_task(self, request, task_id):
+        """Return a task after checking board access."""
+        task = self._get_task(task_id)
+        self.check_object_permissions(request, task)
+        return task
+
     @staticmethod
     def _get_task(task_id):
         """Return the requested task or raise not found."""
@@ -159,3 +176,41 @@ class TaskCommentListCreateView(GenericAPIView):
             return Task.objects.get(pk=task_id)
         except (Task.DoesNotExist, ValueError, TypeError):
             raise NotFound("Task not found.") from None
+
+
+class TaskCommentDetailView(GenericAPIView):
+    """Delete a comment belonging to a task."""
+
+    permission_classes = (
+        IsAuthenticatedTaskUser,
+        IsCommentAuthor,
+    )
+
+    def delete(self, request, task_id, comment_id):
+        """Delete a comment created by the authenticated user."""
+        comment = self._get_comment(task_id, comment_id)
+        self.check_object_permissions(request, comment)
+        comment.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @staticmethod
+    def _get_comment(task_id, comment_id):
+        """Return the requested comment or raise an API error."""
+        TaskCommentDetailView._validate_id(task_id, "task_id")
+        TaskCommentDetailView._validate_id(comment_id, "comment_id")
+        try:
+            return Comment.objects.get(
+                id=comment_id,
+                task_id=task_id,
+            )
+        except Comment.DoesNotExist:
+            raise NotFound("Comment or task not found.") from None
+
+    @staticmethod
+    def _validate_id(value, field):
+        """Reject malformed resource IDs."""
+        if not str(value).isdigit():
+            raise ValidationError(
+                {field: "Invalid ID."}
+            )

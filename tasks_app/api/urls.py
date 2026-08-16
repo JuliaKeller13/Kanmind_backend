@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AssignedTasksView,
     ReviewingTasksView,
+    TaskCommentDetailView,
     TaskCommentListCreateView,
     TaskViewSet,
 )
@@ -38,6 +39,11 @@ urlpatterns = [
         "tasks/<str:task_id>/comments/",
         TaskCommentListCreateView.as_view(),
         name="task-comments",
+    ),
+    path(
+        "tasks/<str:task_id>/comments/<str:comment_id>/",
+        TaskCommentDetailView.as_view(),
+        name="task-comment-detail",
     ),
     path(
         "tasks/<str:task_id>/",
